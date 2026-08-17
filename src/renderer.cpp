@@ -112,11 +112,50 @@ static GLhandle CompileOne(GLenum type, const char* src, char* log, int logSize)
     return sh;
 }
 
+/* ¿El usuario definio su propia funcion main()?
+ *
+ * Un simple strstr("void main") NO sirve: "void mainImage(" tambien
+ * contiene esa subcadena. Hay que saltar comentarios y exigir que
+ * "main" sea un identificador completo seguido de '('.
+ */
+static BOOL HasOwnMain(const char* s)
+{
+    int i = 0;
+    while (s[i]) {
+        /* comentario de linea */
+        if (s[i] == '/' && s[i + 1] == '/') {
+            while (s[i] && s[i] != '\n') i++;
+            continue;
+        }
+        /* comentario de bloque */
+        if (s[i] == '/' && s[i + 1] == '*') {
+            i += 2;
+            while (s[i] && !(s[i] == '*' && s[i + 1] == '/')) i++;
+            if (s[i]) i += 2;
+            continue;
+        }
+        if (s[i] == 'm' && s[i+1] == 'a' && s[i+2] == 'i' && s[i+3] == 'n') {
+            char prev = (i > 0) ? s[i - 1] : ' ';
+            BOOL boundary = !((prev >= 'a' && prev <= 'z') ||
+                              (prev >= 'A' && prev <= 'Z') ||
+                              (prev >= '0' && prev <= '9') || prev == '_');
+            int j = i + 4;
+            while (s[j] == ' ' || s[j] == '\t') j++;
+            /* "mainImage(" falla aqui: tras "main" viene 'I', no '(' */
+            if (boundary && s[j] == '(') return TRUE;
+            i += 4;
+            continue;
+        }
+        i++;
+    }
+    return FALSE;
+}
+
 static char* BuildFragmentSource(const char* userSrc)
 {
     /* Si el usuario ya escribio su propio main(), no envolvemos.
        Si no, asumimos estilo Shadertoy con mainImage(). */
-    BOOL hasMain = (StrFind(userSrc, "void main") >= 0);
+    BOOL hasMain = HasOwnMain(userSrc);
     int  len = StrLen(FS_PREFIX) + StrLen(userSrc) +
                (hasMain ? 2 : StrLen(FS_SUFFIX)) + 8;
     char* out = (char*)MemAlloc(len);
@@ -162,6 +201,9 @@ BOOL RendererApplyShader(const char* userSrc, char* log, int logSize)
         buf[0] = 0;
         gl.GetProgramInfoLog(prog, sizeof(buf) - 1, NULL, buf);
         AppendLog(log, logSize, buf);
+        AppendLog(log, logSize,
+            "\r\n[enlazado fallido] Recuerda: define mainImage(out vec4, in vec2)\r\n"
+            "y deja que GLSLPaper anada el main(), o escribe tu propio main().\r\n");
         gl.DeleteProgram(prog);
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
