@@ -17,6 +17,7 @@ void  StrCopy(char* dst, const char* src);
 void  StrCat(char* dst, const char* src);
 int   StrFind(const char* hay, const char* needle);  /* -1 si no esta */
 char* StrDup(const char* s);
+void  StrAppendSafe(char* dst, int cap, const char* src);
 
 /* ------------------------------------------------------------------ */
 /* Ficheros (CreateFileA/ReadFile, nada de fopen)                      */
@@ -39,9 +40,20 @@ const char* OsShellName(void);
 /* ------------------------------------------------------------------ */
 /* Anclaje al escritorio (desktop.cpp)                                 */
 /* ------------------------------------------------------------------ */
+enum AnchorMode {
+    ANCHOR_AUTO          = 0,
+    ANCHOR_WORKERW_CHILD = 1,
+    ANCHOR_WORKERW_POPUP = 2,
+    ANCHOR_PROGMAN       = 3,
+    ANCHOR_NONE          = 4
+};
 HWND DesktopFindWallpaperHost(void);
 void DesktopAnchor(HWND hwnd);
 void DesktopGetVirtualRect(RECT* out);
+void DesktopSetAnchorMode(int mode);
+int  DesktopGetAnchorMode(void);
+const char* DesktopAnchorModeName(int mode);
+void DesktopDiagnostics(char* out, int cap, HWND renderWnd);
 
 /* ------------------------------------------------------------------ */
 /* Editor (editor.cpp)                                                 */

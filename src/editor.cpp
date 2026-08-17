@@ -28,6 +28,13 @@
 #define IDM_FPS60   401
 #define IDM_FPSMAX  402
 #define IDM_ABOUT   500
+#define IDM_DIAG    501
+#define IDM_REANCH  502
+#define IDM_ANCH0   510
+#define IDM_ANCH1   511
+#define IDM_ANCH2   512
+#define IDM_ANCH3   513
+#define IDM_ANCH4   514
 
 #define LOG_HEIGHT  150
 
@@ -89,6 +96,8 @@ static void SyncMenu(void)
     CheckMenuRadioItem(m, IDM_FPS30, IDM_FPSMAX,
                        f == 30 ? IDM_FPS30 : f == 60 ? IDM_FPS60 : IDM_FPSMAX,
                        MF_BYCOMMAND);
+    CheckMenuRadioItem(m, IDM_ANCH0, IDM_ANCH4,
+                       IDM_ANCH0 + DesktopGetAnchorMode(), MF_BYCOMMAND);
 }
 
 static char* GetCodeText(void)
@@ -222,6 +231,29 @@ static void DoAbout(void)
     MessageBoxA(g_main, buf, "Acerca de GLSLPaper", MB_OK | MB_ICONINFORMATION);
 }
 
+static void DoDiagnostics(void)
+{
+    char buf[4096];
+    DesktopDiagnostics(buf, sizeof(buf), RendererGetWindow());
+    LogSet(buf);
+}
+
+/* mode < 0 significa "conserva el modo actual, solo reancla" */
+static void DoReanchor(int mode)
+{
+    char buf[4096];
+    if (mode >= 0) DesktopSetAnchorMode(mode);
+    if (!RendererIsRunning()) {
+        LogSet("Aplica un shader primero (F5); luego se puede reanclar.\r\n");
+        SyncMenu();
+        return;
+    }
+    RendererReanchor();
+    DesktopDiagnostics(buf, sizeof(buf), RendererGetWindow());
+    LogSet(buf);
+    SyncMenu();
+}
+
 /* ------------------------------------------------------------------ */
 static HMENU BuildMenu(void)
 {
@@ -229,6 +261,7 @@ static HMENU BuildMenu(void)
     HMENU file = CreatePopupMenu();
     HMENU sh   = CreatePopupMenu();
     HMENU view = CreatePopupMenu();
+    HMENU desk = CreatePopupMenu();
     HMENU help = CreatePopupMenu();
 
     AppendMenuA(file, MF_STRING, IDM_NEW,    "&Nuevo\tCtrl+N");
@@ -251,11 +284,21 @@ static HMENU BuildMenu(void)
     AppendMenuA(view, MF_STRING, IDM_FPS60,  "Limite 60 fps");
     AppendMenuA(view, MF_STRING, IDM_FPSMAX, "Sin limite");
 
+    AppendMenuA(desk, MF_STRING, IDM_REANCH, "&Reanclar al escritorio\tF7");
+    AppendMenuA(desk, MF_STRING, IDM_DIAG,   "&Diagnostico\tF8");
+    AppendMenuA(desk, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(desk, MF_STRING, IDM_ANCH0, "Modo &auto");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH1, "Modo &1: WorkerW + WS_CHILD");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH2, "Modo &2: WorkerW sin tocar estilo");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH3, "Modo &3: Progman directo");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH4, "Modo &4: sin padre, al fondo");
+
     AppendMenuA(help, MF_STRING, IDM_ABOUT, "&Acerca de...");
 
     AppendMenuA(bar, MF_POPUP, (UINT_PTR)file, "&Archivo");
     AppendMenuA(bar, MF_POPUP, (UINT_PTR)sh,   "&Shader");
     AppendMenuA(bar, MF_POPUP, (UINT_PTR)view, "&Ver");
+    AppendMenuA(bar, MF_POPUP, (UINT_PTR)desk, "&Escritorio");
     AppendMenuA(bar, MF_POPUP, (UINT_PTR)help, "A&yuda");
     return bar;
 }
@@ -331,6 +374,13 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_FPS60:  RendererSetFpsCap(60); SyncMenu(); return 0;
         case IDM_FPSMAX: RendererSetFpsCap(0);  SyncMenu(); return 0;
         case IDM_ABOUT:  DoAbout();      return 0;
+        case IDM_DIAG:   DoDiagnostics(); return 0;
+        case IDM_REANCH: DoReanchor(-1);  return 0;
+        case IDM_ANCH0:  DoReanchor(ANCHOR_AUTO);          return 0;
+        case IDM_ANCH1:  DoReanchor(ANCHOR_WORKERW_CHILD); return 0;
+        case IDM_ANCH2:  DoReanchor(ANCHOR_WORKERW_POPUP); return 0;
+        case IDM_ANCH3:  DoReanchor(ANCHOR_PROGMAN);       return 0;
+        case IDM_ANCH4:  DoReanchor(ANCHOR_NONE);          return 0;
         }
         return 0;
 
@@ -351,7 +401,7 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
 BOOL EditorCreate(HINSTANCE inst, int cmdShow)
 {
     WNDCLASSA wc;
-    ACCEL     acc[5];
+    ACCEL     acc[7];
 
     ZeroMemory(&wc, sizeof(wc));
     wc.lpfnWndProc   = MainWndProc;
@@ -372,7 +422,9 @@ BOOL EditorCreate(HINSTANCE inst, int cmdShow)
     acc[2].fVirt = FVIRTKEY | FCONTROL;   acc[2].key = 'S';   acc[2].cmd = IDM_SAVE;
     acc[3].fVirt = FVIRTKEY | FCONTROL;   acc[3].key = 'O';   acc[3].cmd = IDM_OPEN;
     acc[4].fVirt = FVIRTKEY | FCONTROL;   acc[4].key = 'N';   acc[4].cmd = IDM_NEW;
-    g_accel = CreateAcceleratorTableA(acc, 5);
+    acc[5].fVirt = FVIRTKEY;              acc[5].key = VK_F7; acc[5].cmd = IDM_REANCH;
+    acc[6].fVirt = FVIRTKEY;              acc[6].key = VK_F8; acc[6].cmd = IDM_DIAG;
+    g_accel = CreateAcceleratorTableA(acc, 7);
 
     SyncMenu();
     UpdateTitle();

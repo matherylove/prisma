@@ -52,6 +52,17 @@ char* StrDup(const char* s)
     return p;
 }
 
+void StrAppendSafe(char* dst, int cap, const char* src)
+{
+    int used, room, i = 0;
+    if (!dst || !src || cap <= 1) return;
+    used = StrLen(dst);
+    room = cap - used - 1;
+    if (room <= 0) return;
+    while (src[i] && i < room) { dst[used + i] = src[i]; i++; }
+    dst[used + i] = 0;
+}
+
 /* ------------------------------------------------------------------ */
 char* FileReadAll(const char* path)
 {

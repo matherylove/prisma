@@ -6,6 +6,8 @@
 BOOL  RendererStart(char* err, int errSize);
 void  RendererStop(void);
 BOOL  RendererIsRunning(void);
+HWND  RendererGetWindow(void);
+void  RendererReanchor(void);
 
 /* Compila y activa el shader. Devuelve FALSE y rellena 'log' si falla;
    en ese caso el shader anterior sigue en marcha. */

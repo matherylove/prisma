@@ -384,6 +384,11 @@ BOOL RendererStart(char* err, int errSize)
         return FALSE;
     }
 
+    /* IMPORTANTE: anclar ANTES de crear el contexto GL. Reparentar una
+       ventana que ya tiene contexto confunde a la swap chain en varios
+       drivers y el resultado es que se dibuja "a ninguna parte". */
+    DesktopAnchor(g_wnd);
+
     g_dc = GetDC(g_wnd);
 
     ZeroMemory(&pfd, sizeof(pfd));
@@ -419,7 +424,6 @@ BOOL RendererStart(char* err, int errSize)
     glDisable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
 
-    DesktopAnchor(g_wnd);
     RendererResetTime();
     return TRUE;
 }
@@ -440,6 +444,13 @@ void RendererStop(void)
 }
 
 BOOL RendererIsRunning(void) { return (g_rc != NULL && g_prog != 0); }
+
+HWND RendererGetWindow(void) { return g_wnd; }
+
+void RendererReanchor(void)
+{
+    if (g_wnd) DesktopAnchor(g_wnd);
+}
 
 void RendererResetTime(void)
 {
