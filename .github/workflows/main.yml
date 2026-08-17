@@ -1,0 +1,40 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  mingw32:
+    name: MinGW-w64 (32-bit)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar MSYS2 / MINGW32
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            make
+            mingw-w64-i686-gcc
+            mingw-w64-i686-binutils
+
+      - name: Compilar
+        run: make
+
+      - name: Revisar imports (auditoria de compatibilidad)
+        run: make imports || true
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: glslpaper-win32
+          path: build/glslpaper.exe
+          if-no-files-found: error
