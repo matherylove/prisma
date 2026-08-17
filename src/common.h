@@ -41,14 +41,15 @@ const char* OsShellName(void);
 /* Anclaje al escritorio (desktop.cpp)                                 */
 /* ------------------------------------------------------------------ */
 enum AnchorMode {
-    ANCHOR_AUTO          = 0,
-    ANCHOR_WORKERW_CHILD = 1,
-    ANCHOR_WORKERW_POPUP = 2,
-    ANCHOR_PROGMAN       = 3,
-    ANCHOR_NONE          = 4
+    ANCHOR_AUTO            = 0,
+    ANCHOR_WORKERW_SIBLING = 1,  /* WorkerW hermano del que tiene DefView */
+    ANCHOR_DEFVIEW_HOST    = 2,  /* la propia ventana que contiene DefView */
+    ANCHOR_PROGMAN         = 3,
+    ANCHOR_NONE            = 4   /* sin padre: tapa iconos, solo emergencia */
 };
-HWND DesktopFindWallpaperHost(void);
-void DesktopAnchor(HWND hwnd);
+HWND DesktopResolveHost(int mode);
+int  DesktopEffectiveMode(void);
+void DesktopPlace(HWND hwnd, HWND host);
 void DesktopGetVirtualRect(RECT* out);
 void DesktopSetAnchorMode(int mode);
 int  DesktopGetAnchorMode(void);

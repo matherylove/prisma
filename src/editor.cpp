@@ -35,6 +35,7 @@
 #define IDM_ANCH2   512
 #define IDM_ANCH3   513
 #define IDM_ANCH4   514
+#define IDM_ANCH5   515
 
 #define LOG_HEIGHT  150
 
@@ -238,19 +239,31 @@ static void DoDiagnostics(void)
     LogSet(buf);
 }
 
-/* mode < 0 significa "conserva el modo actual, solo reancla" */
+/* mode < 0 significa "conserva el modo actual, solo recoloca".
+ *
+ * Cambiar de modo obliga a recrear la ventana: el padre y WS_CHILD solo
+ * se pueden fijar en CreateWindowEx. Por eso paramos y reaplicamos. */
 static void DoReanchor(int mode)
 {
-    char buf[4096];
-    if (mode >= 0) DesktopSetAnchorMode(mode);
-    if (!RendererIsRunning()) {
-        LogSet("Aplica un shader primero (F5); luego se puede reanclar.\r\n");
-        SyncMenu();
-        return;
+    BOOL wasRunning = RendererIsRunning();
+
+    if (mode >= 0 && mode != DesktopGetAnchorMode()) {
+        DesktopSetAnchorMode(mode);
+        if (wasRunning) {
+            RendererStop();
+            DoApply();          /* recrea la ventana con el nuevo padre */
+        }
+    } else if (wasRunning) {
+        RendererReanchor();
     }
-    RendererReanchor();
-    DesktopDiagnostics(buf, sizeof(buf), RendererGetWindow());
-    LogSet(buf);
+
+    if (!RendererIsRunning()) {
+        LogSet("Modo cambiado. Pulsa F5 para aplicar.\r\n");
+    } else {
+        char buf[4096];
+        DesktopDiagnostics(buf, sizeof(buf), RendererGetWindow());
+        LogSet(buf);
+    }
     SyncMenu();
 }
 
@@ -288,10 +301,10 @@ static HMENU BuildMenu(void)
     AppendMenuA(desk, MF_STRING, IDM_DIAG,   "&Diagnostico\tF8");
     AppendMenuA(desk, MF_SEPARATOR, 0, NULL);
     AppendMenuA(desk, MF_STRING, IDM_ANCH0, "Modo &auto");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH1, "Modo &1: WorkerW + WS_CHILD");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH2, "Modo &2: WorkerW sin tocar estilo");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH3, "Modo &3: Progman directo");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH4, "Modo &4: sin padre, al fondo");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH1, "Modo &1: WorkerW hermano de DefView");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH2, "Modo &2: ventana que contiene DefView");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH3, "Modo &3: Progman");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH4, "Modo &4: sin padre (tapa iconos)");
 
     AppendMenuA(help, MF_STRING, IDM_ABOUT, "&Acerca de...");
 
@@ -377,8 +390,8 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_DIAG:   DoDiagnostics(); return 0;
         case IDM_REANCH: DoReanchor(-1);  return 0;
         case IDM_ANCH0:  DoReanchor(ANCHOR_AUTO);          return 0;
-        case IDM_ANCH1:  DoReanchor(ANCHOR_WORKERW_CHILD); return 0;
-        case IDM_ANCH2:  DoReanchor(ANCHOR_WORKERW_POPUP); return 0;
+        case IDM_ANCH1:  DoReanchor(ANCHOR_WORKERW_SIBLING); return 0;
+        case IDM_ANCH2:  DoReanchor(ANCHOR_DEFVIEW_HOST);    return 0;
         case IDM_ANCH3:  DoReanchor(ANCHOR_PROGMAN);       return 0;
         case IDM_ANCH4:  DoReanchor(ANCHOR_NONE);          return 0;
         }

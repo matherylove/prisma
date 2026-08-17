@@ -16,6 +16,7 @@
 static const char* RENDER_CLASS = "GLSLPaperRenderWnd";
 
 static HWND      g_wnd  = NULL;
+static HWND      g_host = NULL;
 static HDC       g_dc   = NULL;
 static HGLRC     g_rc   = NULL;
 static GLhandle  g_prog = 0;
@@ -263,8 +264,20 @@ static BOOL ShouldPause(void)
 {
     HWND fg = GetForegroundWindow();
     RECT r, scr;
+    char cls[64];
 
     if (!fg) return FALSE;
+
+    /* El propio escritorio ocupa toda la pantalla. Sin esta excepcion,
+       en cuanto el usuario hace clic en el escritorio creeriamos que hay
+       una aplicacion a pantalla completa delante y congelariamos la
+       animacion justo cuando mas se ve. */
+    cls[0] = 0;
+    GetClassNameA(fg, cls, sizeof(cls));
+    if (StrFind(cls, "Progman") == 0 || StrFind(cls, "WorkerW") == 0 ||
+        StrFind(cls, "Shell_TrayWnd") == 0)
+        return FALSE;
+
     if (!GetWindowRect(fg, &r)) return FALSE;
 
     scr.left = 0; scr.top = 0;
@@ -372,22 +385,26 @@ BOOL RendererStart(char* err, int errSize)
     g_width  = r.right - r.left;
     g_height = r.bottom - r.top;
 
+    /* El padre y el estilo WS_CHILD se fijan AQUI, en la creacion.
+       WS_CHILD no se puede anadir despues con SetWindowLong, y un
+       SetParent sobre una ventana WS_POPUP solo cambia el propietario:
+       la ventana sigue siendo de nivel superior y al mandarla al fondo
+       del Z-order desaparece detras del escritorio. */
+    g_host = DesktopResolveHost(DesktopEffectiveMode());
+
     g_wnd = CreateWindowExA(
         WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         RENDER_CLASS, "GLSLPaper",
-        WS_POPUP,
-        r.left, r.top, g_width, g_height,
-        NULL, NULL, wc.hInstance, NULL);
+        g_host ? (WS_CHILD | WS_VISIBLE) : (WS_POPUP | WS_VISIBLE),
+        g_host ? 0 : r.left, g_host ? 0 : r.top, g_width, g_height,
+        g_host, NULL, wc.hInstance, NULL);
 
     if (!g_wnd) {
         if (err) StrCopy(err, "No se pudo crear la ventana de render.");
         return FALSE;
     }
 
-    /* IMPORTANTE: anclar ANTES de crear el contexto GL. Reparentar una
-       ventana que ya tiene contexto confunde a la swap chain en varios
-       drivers y el resultado es que se dibuja "a ninguna parte". */
-    DesktopAnchor(g_wnd);
+    DesktopPlace(g_wnd, g_host);
 
     g_dc = GetDC(g_wnd);
 
@@ -441,6 +458,7 @@ void RendererStop(void)
     if (g_dc)  { ReleaseDC(g_wnd, g_dc); g_dc = NULL; }
     if (g_wnd) { DestroyWindow(g_wnd); g_wnd = NULL; }
     g_texW = g_texH = 0;
+    g_host = NULL;
 }
 
 BOOL RendererIsRunning(void) { return (g_rc != NULL && g_prog != 0); }
@@ -449,7 +467,9 @@ HWND RendererGetWindow(void) { return g_wnd; }
 
 void RendererReanchor(void)
 {
-    if (g_wnd) DesktopAnchor(g_wnd);
+    /* No se puede reanclar en caliente: cambiar de padre exige recrear
+       la ventana con WS_CHILD. El editor para y vuelve a aplicar. */
+    if (g_wnd) DesktopPlace(g_wnd, g_host);
 }
 
 void RendererResetTime(void)
