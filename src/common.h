@@ -42,14 +42,16 @@ const char* OsShellName(void);
 /* ------------------------------------------------------------------ */
 enum AnchorMode {
     ANCHOR_AUTO            = 0,
-    ANCHOR_WORKERW_SIBLING = 1,  /* WorkerW hermano del que tiene DefView */
-    ANCHOR_DEFVIEW_HOST    = 2,  /* la propia ventana que contiene DefView */
-    ANCHOR_PROGMAN         = 3,
-    ANCHOR_NONE            = 4   /* sin padre: tapa iconos, solo emergencia */
+    ANCHOR_WORKERW_SIBLING = 1,  /* WorkerW de nivel superior, hermano de DefView */
+    ANCHOR_WORKERW_CHILD   = 2,  /* WorkerW hija de Progman (Windows 11) */
+    ANCHOR_UNDER_DEFVIEW   = 3,  /* hija de Progman, justo debajo de los iconos */
+    ANCHOR_PROGMAN_BOTTOM  = 4,  /* hija de Progman, al fondo del todo */
+    ANCHOR_NONE            = 5   /* sin padre: tapa iconos, solo emergencia */
 };
 HWND DesktopResolveHost(int mode);
+HWND DesktopGetInsertAfter(void);
 int  DesktopEffectiveMode(void);
-void DesktopPlace(HWND hwnd, HWND host);
+void DesktopPlace(HWND hwnd, HWND host, HWND insertAfter);
 void DesktopGetVirtualRect(RECT* out);
 void DesktopSetAnchorMode(int mode);
 int  DesktopGetAnchorMode(void);

@@ -17,6 +17,7 @@ static const char* RENDER_CLASS = "GLSLPaperRenderWnd";
 
 static HWND      g_wnd  = NULL;
 static HWND      g_host = NULL;
+static HWND      g_insertAfter = NULL;
 static HDC       g_dc   = NULL;
 static HGLRC     g_rc   = NULL;
 static GLhandle  g_prog = 0;
@@ -390,7 +391,8 @@ BOOL RendererStart(char* err, int errSize)
        SetParent sobre una ventana WS_POPUP solo cambia el propietario:
        la ventana sigue siendo de nivel superior y al mandarla al fondo
        del Z-order desaparece detras del escritorio. */
-    g_host = DesktopResolveHost(DesktopEffectiveMode());
+    g_host = DesktopResolveHost(DesktopGetAnchorMode());
+    g_insertAfter = DesktopGetInsertAfter();
 
     g_wnd = CreateWindowExA(
         WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
@@ -404,7 +406,7 @@ BOOL RendererStart(char* err, int errSize)
         return FALSE;
     }
 
-    DesktopPlace(g_wnd, g_host);
+    DesktopPlace(g_wnd, g_host, g_insertAfter);
 
     g_dc = GetDC(g_wnd);
 
@@ -459,6 +461,7 @@ void RendererStop(void)
     if (g_wnd) { DestroyWindow(g_wnd); g_wnd = NULL; }
     g_texW = g_texH = 0;
     g_host = NULL;
+    g_insertAfter = NULL;
 }
 
 BOOL RendererIsRunning(void) { return (g_rc != NULL && g_prog != 0); }
@@ -469,7 +472,7 @@ void RendererReanchor(void)
 {
     /* No se puede reanclar en caliente: cambiar de padre exige recrear
        la ventana con WS_CHILD. El editor para y vuelve a aplicar. */
-    if (g_wnd) DesktopPlace(g_wnd, g_host);
+    if (g_wnd) DesktopPlace(g_wnd, g_host, g_insertAfter);
 }
 
 void RendererResetTime(void)

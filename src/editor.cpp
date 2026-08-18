@@ -97,7 +97,7 @@ static void SyncMenu(void)
     CheckMenuRadioItem(m, IDM_FPS30, IDM_FPSMAX,
                        f == 30 ? IDM_FPS30 : f == 60 ? IDM_FPS60 : IDM_FPSMAX,
                        MF_BYCOMMAND);
-    CheckMenuRadioItem(m, IDM_ANCH0, IDM_ANCH4,
+    CheckMenuRadioItem(m, IDM_ANCH0, IDM_ANCH5,
                        IDM_ANCH0 + DesktopGetAnchorMode(), MF_BYCOMMAND);
 }
 
@@ -301,10 +301,11 @@ static HMENU BuildMenu(void)
     AppendMenuA(desk, MF_STRING, IDM_DIAG,   "&Diagnostico\tF8");
     AppendMenuA(desk, MF_SEPARATOR, 0, NULL);
     AppendMenuA(desk, MF_STRING, IDM_ANCH0, "Modo &auto");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH1, "Modo &1: WorkerW hermano de DefView");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH2, "Modo &2: ventana que contiene DefView");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH3, "Modo &3: Progman");
-    AppendMenuA(desk, MF_STRING, IDM_ANCH4, "Modo &4: sin padre (tapa iconos)");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH1, "Modo &1: WorkerW de nivel superior");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH2, "Modo &2: WorkerW hija de Progman");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH3, "Modo &3: Progman, debajo de DefView");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH4, "Modo &4: Progman, al fondo del todo");
+    AppendMenuA(desk, MF_STRING, IDM_ANCH5, "Modo &5: sin padre (tapa iconos)");
 
     AppendMenuA(help, MF_STRING, IDM_ABOUT, "&Acerca de...");
 
@@ -391,9 +392,10 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_REANCH: DoReanchor(-1);  return 0;
         case IDM_ANCH0:  DoReanchor(ANCHOR_AUTO);          return 0;
         case IDM_ANCH1:  DoReanchor(ANCHOR_WORKERW_SIBLING); return 0;
-        case IDM_ANCH2:  DoReanchor(ANCHOR_DEFVIEW_HOST);    return 0;
-        case IDM_ANCH3:  DoReanchor(ANCHOR_PROGMAN);       return 0;
-        case IDM_ANCH4:  DoReanchor(ANCHOR_NONE);          return 0;
+        case IDM_ANCH2:  DoReanchor(ANCHOR_WORKERW_CHILD);   return 0;
+        case IDM_ANCH3:  DoReanchor(ANCHOR_UNDER_DEFVIEW);   return 0;
+        case IDM_ANCH4:  DoReanchor(ANCHOR_PROGMAN_BOTTOM);  return 0;
+        case IDM_ANCH5:  DoReanchor(ANCHOR_NONE);            return 0;
         }
         return 0;
 
