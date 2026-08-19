@@ -20,6 +20,8 @@
 #define IDM_APPLY   200
 #define IDM_STOP    201
 #define IDM_RESET   202
+#define IDM_LIVE    203
+#define IDT_LIVE    1
 #define IDM_SCALE1  300
 #define IDM_SCALE2  301
 #define IDM_SCALE3  302
@@ -47,6 +49,7 @@ static HWND   g_log  = NULL;
 static HFONT  g_font = NULL;
 static HACCEL g_accel = NULL;
 static char   g_path[MAX_PATH];
+static BOOL   g_live = TRUE;   /* recompilar al escribir, como GLSL Sandbox */
 
 static const char* DEFAULT_SHADER =
     "// GLSLPaper - estilo Shadertoy, perfil GLSL 1.10\r\n"
@@ -97,6 +100,7 @@ static void SyncMenu(void)
     CheckMenuRadioItem(m, IDM_FPS30, IDM_FPSMAX,
                        f == 30 ? IDM_FPS30 : f == 60 ? IDM_FPS60 : IDM_FPSMAX,
                        MF_BYCOMMAND);
+    CheckMenuItem(m, IDM_LIVE, MF_BYCOMMAND | (g_live ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuRadioItem(m, IDM_ANCH0, IDM_ANCH5,
                        IDM_ANCH0 + DesktopGetAnchorMode(), MF_BYCOMMAND);
 }
@@ -287,6 +291,8 @@ static HMENU BuildMenu(void)
     AppendMenuA(sh, MF_STRING, IDM_APPLY, "&Aplicar\tF5");
     AppendMenuA(sh, MF_STRING, IDM_STOP,  "&Detener");
     AppendMenuA(sh, MF_STRING, IDM_RESET, "&Reiniciar tiempo\tF6");
+    AppendMenuA(sh, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(sh, MF_STRING, IDM_LIVE,  "Recompilar al &escribir");
 
     AppendMenuA(view, MF_STRING, IDM_SCALE1, "Escala 1/&1 (nativa)");
     AppendMenuA(view, MF_STRING, IDM_SCALE2, "Escala 1/&2");
@@ -354,9 +360,17 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         SendMessageA(g_log,  WM_SETFONT, (WPARAM)g_font, TRUE);
         SendMessageA(g_code, EM_LIMITTEXT, 1024 * 512, 0);
         SetWindowTextA(g_code, DEFAULT_SHADER);
-        LogSet("Listo. F5 para aplicar el shader al escritorio.\r\n");
+        LogSet("Listo. F5 para aplicar el shader al escritorio.\r\n"
+               "Despues se recompila solo al escribir, como GLSL Sandbox.\r\n");
         return 0;
     }
+
+    case WM_TIMER:
+        if (w == IDT_LIVE) {
+            KillTimer(h, IDT_LIVE);
+            if (g_live && RendererIsRunning()) DoApply();
+        }
+        return 0;
 
     case WM_SIZE:
         Layout(h);
@@ -367,6 +381,14 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
 
     case WM_COMMAND:
+        /* Recompilacion en vivo: no en cada pulsacion, sino 600 ms
+           despues de la ultima. Sin ese retardo se recompila a mitad
+           de cada palabra y el log se llena de errores de sintaxis. */
+        if (HIWORD(w) == EN_CHANGE && LOWORD(w) == IDC_CODE) {
+            if (g_live && RendererIsRunning())
+                SetTimer(h, IDT_LIVE, 600, NULL);
+            return 0;
+        }
         switch (LOWORD(w)) {
         case IDM_NEW:
             g_path[0] = 0;
@@ -380,6 +402,7 @@ static LRESULT CALLBACK MainWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
         case IDM_APPLY:  DoApply();      return 0;
         case IDM_STOP:   DoStop();       return 0;
         case IDM_RESET:  RendererResetTime(); return 0;
+        case IDM_LIVE:   g_live = !g_live; SyncMenu(); return 0;
         case IDM_SCALE1: RendererSetScale(1); SyncMenu(); UpdateTitle(); return 0;
         case IDM_SCALE2: RendererSetScale(2); SyncMenu(); UpdateTitle(); return 0;
         case IDM_SCALE3: RendererSetScale(3); SyncMenu(); UpdateTitle(); return 0;

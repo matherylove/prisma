@@ -33,6 +33,7 @@ BOOL GlLoadShaderApi(char* errOut, int errSize)
 
     gl.Uniform1f = (PFN_Uniform1f)GetAny("glUniform1f", "glUniform1fARB");
     gl.Uniform1i = (PFN_Uniform1i)GetAny("glUniform1i", "glUniform1iARB");
+    gl.Uniform2f = (PFN_Uniform2f)GetAny("glUniform2f", "glUniform2fARB");
     gl.Uniform3f = (PFN_Uniform3f)GetAny("glUniform3f", "glUniform3fARB");
     gl.Uniform4f = (PFN_Uniform4f)GetAny("glUniform4f", "glUniform4fARB");
 

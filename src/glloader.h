@@ -46,6 +46,7 @@ typedef void     (APIENTRY *PFN_DeleteObject)(GLhandle);
 typedef GLint    (APIENTRY *PFN_GetUniformLocation)(GLhandle, const char*);
 typedef void     (APIENTRY *PFN_Uniform1f)(GLint, GLfloat);
 typedef void     (APIENTRY *PFN_Uniform1i)(GLint, GLint);
+typedef void     (APIENTRY *PFN_Uniform2f)(GLint, GLfloat, GLfloat);
 typedef void     (APIENTRY *PFN_Uniform3f)(GLint, GLfloat, GLfloat, GLfloat);
 typedef void     (APIENTRY *PFN_Uniform4f)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
 typedef BOOL     (APIENTRY *PFN_SwapInterval)(int);
@@ -67,6 +68,7 @@ struct GlFns {
     PFN_GetUniformLocation GetUniformLocation;
     PFN_Uniform1f          Uniform1f;
     PFN_Uniform1i          Uniform1i;
+    PFN_Uniform2f          Uniform2f;
     PFN_Uniform3f          Uniform3f;
     PFN_Uniform4f          Uniform4f;
     PFN_SwapInterval       SwapInterval;

@@ -43,13 +43,45 @@ static void PokeExplorer(HWND progman)
 {
     DWORD_PTR result = 0;
     if (!progman) return;
-    /* Mensaje no documentado que hace a Explorer crear la capa WorkerW.
-       Variante de Windows 11 primero, luego las clasicas de 8/10. */
+    /* Mensaje no documentado que hace a Explorer dividir el escritorio
+       en dos capas: una WorkerW que pinta el fondo y Progman/DefView
+       que pinta los iconos de forma transparente. */
+    SendMessageTimeoutA(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, &result);
     SendMessageTimeoutA(progman, 0x052C, 0x0000000D, 0x00000001,
                         SMTO_NORMAL, 1000, &result);
-    SendMessageTimeoutA(progman, 0x052C, 0x0000000D, 0x00000000,
-                        SMTO_NORMAL, 1000, &result);
-    SendMessageTimeoutA(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, &result);
+}
+
+/* Busca la WorkerW HIJA de Progman. En Windows 11 (y sobre todo 24H2)
+ * esta es la capa buena, y tiene tres particularidades que hacen que
+ * las recetas antiguas fallen:
+ *
+ *   - No es una ventana de nivel superior, asi que EnumWindows no la ve.
+ *   - Suele estar oculta (IsWindowVisible == 0).
+ *   - No existe justo tras el arranque; Explorer tarda en crearla.
+ *
+ * Por eso hay que reintentar con pausas en vez de mirar una sola vez.
+ * Nos quedamos con la ULTIMA de la lista, que es la capa de fondo.
+ */
+static HWND SpawnWorkerW(HWND progman, int maxWaitMs)
+{
+    int waited = 0;
+
+    if (!progman) return NULL;
+
+    for (;;) {
+        HWND w = FindWindowExA(progman, NULL, "WorkerW", NULL);
+        HWND last = NULL;
+        while (w) {
+            last = w;
+            w = FindWindowExA(progman, w, "WorkerW", NULL);
+        }
+        if (last) return last;
+
+        if (waited >= maxWaitMs) return NULL;
+        PokeExplorer(progman);
+        Sleep(250);
+        waited += 250;
+    }
 }
 
 static BOOL CALLBACK EnumProcScan(HWND top, LPARAM lp)
@@ -73,25 +105,14 @@ static void ScanDesktop(void)
     g_progmanWorker = NULL;
     g_defView       = NULL;
 
-    if (OsShellGeneration() >= SHELL_WIN8) {
-        PokeExplorer(progman);
-        /* Explorer crea la capa de forma asincrona; sin esta pausa la
-           buscamos antes de que exista. */
-        Sleep(120);
-    }
+    if (OsShellGeneration() >= SHELL_WIN8) PokeExplorer(progman);
 
     EnumWindows(EnumProcScan, 0);
 
-    /* En Windows 11 la WorkerW de fondo puede ser HIJA de Progman, y
-       entonces EnumWindows (que solo ve ventanas de nivel superior) no
-       la encuentra nunca. */
     if (progman) {
-        HWND w = FindWindowExA(progman, NULL, "WorkerW", NULL);
-        while (w) {
-            if (IsUsableHost(w)) { g_progmanWorker = w; break; }
-            w = FindWindowExA(progman, w, "WorkerW", NULL);
-        }
         g_defView = FindWindowExA(progman, NULL, "SHELLDLL_DefView", NULL);
+        if (OsShellGeneration() >= SHELL_WIN8)
+            g_progmanWorker = SpawnWorkerW(progman, 3000);
     }
 }
 
@@ -99,8 +120,10 @@ static void ScanDesktop(void)
 int DesktopEffectiveMode(void)
 {
     if (g_anchorMode != ANCHOR_AUTO) return g_anchorMode;
+    /* En Windows 8+ la capa correcta es la WorkerW hija de Progman.
+       Es lo que usan Wallpaper Engine y companiia. */
     return (OsShellGeneration() >= SHELL_WIN8)
-         ? ANCHOR_WORKERW_SIBLING : ANCHOR_UNDER_DEFVIEW;
+         ? ANCHOR_WORKERW_CHILD : ANCHOR_UNDER_DEFVIEW;
 }
 
 HWND DesktopGetInsertAfter(void) { return g_insertAfter; }
@@ -122,7 +145,12 @@ HWND DesktopResolveHost(int mode)
         if (IsUsableHost(g_workerSibling)) return g_workerSibling;
         break;
     case ANCHOR_WORKERW_CHILD:
-        if (IsUsableHost(g_progmanWorker)) return g_progmanWorker;
+        /* Ojo: NO se filtra por IsUsableHost. Esta WorkerW suele estar
+           oculta y reportar tamano cero hasta que se le cuelga algo. */
+        if (g_progmanWorker) {
+            ShowWindow(g_progmanWorker, SW_SHOWNA);
+            return g_progmanWorker;
+        }
         break;
     case ANCHOR_UNDER_DEFVIEW:
         if (IsUsableHost(progman)) {
@@ -140,8 +168,11 @@ HWND DesktopResolveHost(int mode)
     }
 
     /* Degradacion ordenada */
+    if (g_progmanWorker) {
+        ShowWindow(g_progmanWorker, SW_SHOWNA);
+        return g_progmanWorker;
+    }
     if (IsUsableHost(g_workerSibling)) return g_workerSibling;
-    if (IsUsableHost(g_progmanWorker)) return g_progmanWorker;
     if (IsUsableHost(progman)) {
         if (g_defView) g_insertAfter = g_defView;
         return progman;

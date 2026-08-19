@@ -37,26 +37,45 @@ static int   g_frame = 0;
 
 /* localizaciones de uniforms */
 static GLint u_res, u_time, u_delta, u_frame, u_mouse, u_globalTime;
+static GLint u_sbTime, u_sbRes, u_sbMouse, u_backbuffer, u_surfSize, u_chan0;
 
 /* ------------------------------------------------------------------ */
 /* Fuentes fijas                                                       */
 /* ------------------------------------------------------------------ */
 static const char* VS_SRC =
     "#version 110\n"
+    "uniform vec2 surfaceSize;\n"
+    "varying vec2 surfacePosition;\n"
     "void main() {\n"
     "    gl_TexCoord[0] = gl_MultiTexCoord0;\n"
+    "    surfacePosition = gl_Vertex.xy * surfaceSize;\n"
     "    gl_Position = gl_Vertex;\n"
     "}\n";
 
-static const char* FS_PREFIX =
-    "#version 110\n"
-    "uniform vec3  iResolution;\n"
-    "uniform float iTime;\n"
-    "uniform float iGlobalTime;\n"
-    "uniform float iTimeDelta;\n"
-    "uniform int   iFrame;\n"
-    "uniform vec4  iMouse;\n"
-    "#line 1\n";
+/* Declaraciones que se inyectan SOLO si el usuario no las ha escrito ya.
+ * Los shaders de Shadertoy no declaran sus uniforms (se los inyectan);
+ * los de GLSL Sandbox SI los declaran. Si duplicamos la declaracion, el
+ * compilador da error de redefinicion, asi que hay que comprobarlo. */
+struct Decl { const char* ident; const char* text; };
+
+static const Decl DECLS[] = {
+    /* --- estilo Shadertoy --- */
+    { "iResolution",     "uniform vec3  iResolution;\n" },
+    { "iTime",           "uniform float iTime;\n" },
+    { "iGlobalTime",     "uniform float iGlobalTime;\n" },
+    { "iTimeDelta",      "uniform float iTimeDelta;\n" },
+    { "iFrame",          "uniform int   iFrame;\n" },
+    { "iMouse",          "uniform vec4  iMouse;\n" },
+    { "iChannel0",       "uniform sampler2D iChannel0;\n" },
+    /* --- estilo GLSL Sandbox --- */
+    { "time",            "uniform float time;\n" },
+    { "resolution",      "uniform vec2  resolution;\n" },
+    { "mouse",           "uniform vec2  mouse;\n" },
+    { "backbuffer",      "uniform sampler2D backbuffer;\n" },
+    { "surfaceSize",     "uniform vec2  surfaceSize;\n" },
+    { "surfacePosition", "varying vec2  surfacePosition;\n" }
+};
+static const int DECL_COUNT = (int)(sizeof(DECLS) / sizeof(DECLS[0]));
 
 static const char* FS_SUFFIX =
     "\nvoid main() {\n"
@@ -153,19 +172,67 @@ static BOOL HasOwnMain(const char* s)
     return FALSE;
 }
 
+static BOOL IsIdentChar(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+static BOOL RangeHas(const char* s, int from, int to, const char* needle)
+{
+    int i, j;
+    for (i = from; i < to; i++) {
+        for (j = 0; needle[j]; j++)
+            if (i + j >= to || s[i + j] != needle[j]) break;
+        if (!needle[j]) return TRUE;
+    }
+    return FALSE;
+}
+
+/* ¿El usuario ya declaro este identificador como uniform o varying? */
+static BOOL IsDeclared(const char* s, const char* ident)
+{
+    int n = StrLen(ident);
+    int i = 0;
+
+    while (s[i]) {
+        int j;
+        for (j = 0; j < n; j++) if (s[i + j] != ident[j]) break;
+        if (j == n) {
+            char prev = (i > 0) ? s[i - 1] : ' ';
+            if (!IsIdentChar(prev) && !IsIdentChar(s[i + n])) {
+                int k = i;
+                while (k > 0 && s[k - 1] != '\n') k--;
+                if (RangeHas(s, k, i, "uniform") || RangeHas(s, k, i, "varying"))
+                    return TRUE;
+            }
+        }
+        i++;
+    }
+    return FALSE;
+}
+
 static char* BuildFragmentSource(const char* userSrc)
 {
     /* Si el usuario ya escribio su propio main(), no envolvemos.
        Si no, asumimos estilo Shadertoy con mainImage(). */
     BOOL hasMain = HasOwnMain(userSrc);
-    int  len = StrLen(FS_PREFIX) + StrLen(userSrc) +
-               (hasMain ? 2 : StrLen(FS_SUFFIX)) + 8;
+    int  len = 2048 + StrLen(userSrc) + StrLen(FS_SUFFIX);
     char* out = (char*)MemAlloc(len);
+    int   i;
+
     if (!out) return NULL;
 
-    StrCopy(out, FS_PREFIX);
-    StrCat(out, userSrc);
-    if (!hasMain) StrCat(out, FS_SUFFIX);
+    StrCopy(out, "#version 110\n");
+    for (i = 0; i < DECL_COUNT; i++) {
+        if (!IsDeclared(userSrc, DECLS[i].ident))
+            StrAppendSafe(out, len, DECLS[i].text);
+    }
+    /* A partir de aqui los numeros de linea de los errores del driver
+       coinciden con los del editor. */
+    StrAppendSafe(out, len, "#line 1\n");
+    StrAppendSafe(out, len, userSrc);
+    if (!hasMain) StrAppendSafe(out, len, FS_SUFFIX);
     return out;
 }
 
@@ -227,6 +294,12 @@ BOOL RendererApplyShader(const char* userSrc, char* log, int logSize)
     u_delta      = gl.GetUniformLocation(g_prog, "iTimeDelta");
     u_frame      = gl.GetUniformLocation(g_prog, "iFrame");
     u_mouse      = gl.GetUniformLocation(g_prog, "iMouse");
+    u_chan0      = gl.GetUniformLocation(g_prog, "iChannel0");
+    u_sbTime     = gl.GetUniformLocation(g_prog, "time");
+    u_sbRes      = gl.GetUniformLocation(g_prog, "resolution");
+    u_sbMouse    = gl.GetUniformLocation(g_prog, "mouse");
+    u_backbuffer = gl.GetUniformLocation(g_prog, "backbuffer");
+    u_surfSize   = gl.GetUniformLocation(g_prog, "surfaceSize");
 
     AppendLog(log, logSize, "Shader compilado y enlazado correctamente.\r\n");
     return TRUE;
@@ -247,7 +320,6 @@ static void EnsureTexture(int w, int h)
     glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, w, h, 0);
     g_texW = w;
     g_texH = h;
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static void DrawQuad(void)
@@ -332,7 +404,6 @@ void RendererTick(void)
     GetCursorPos(&pt);
 
     /* --- pasada del shader, a resolucion reducida si toca --- */
-    glDisable(GL_TEXTURE_2D);
     glViewport(0, 0, rw, rh);
     gl.UseProgram(g_prog);
 
@@ -343,14 +414,32 @@ void RendererTick(void)
     if (u_frame >= 0) gl.Uniform1i(u_frame, g_frame);
     if (u_mouse >= 0) gl.Uniform4f(u_mouse, (float)pt.x,
                                    (float)(g_height - pt.y), 0.0f, 0.0f);
+
+    /* --- equivalentes de GLSL Sandbox --- */
+    if (u_sbTime >= 0) gl.Uniform1f(u_sbTime, t);
+    if (u_sbRes  >= 0 && gl.Uniform2f)
+        gl.Uniform2f(u_sbRes, (float)rw, (float)rh);
+    if (u_sbMouse >= 0 && gl.Uniform2f)
+        gl.Uniform2f(u_sbMouse, (float)pt.x / (float)g_width,
+                     1.0f - (float)pt.y / (float)g_height);
+    if (u_surfSize >= 0 && gl.Uniform2f)
+        gl.Uniform2f(u_surfSize, (float)rw / (float)rh, 1.0f);
+
+    /* backbuffer / iChannel0 = fotograma anterior, en la unidad 0 */
+    EnsureTexture(rw, rh);
+    if (u_backbuffer >= 0) gl.Uniform1i(u_backbuffer, 0);
+    if (u_chan0      >= 0) gl.Uniform1i(u_chan0, 0);
+    glBindTexture(GL_TEXTURE_2D, g_tex);
+
     DrawQuad();
+
+    /* Guardamos el fotograma recien dibujado: sera el backbuffer del
+       siguiente, y de paso sirve para el reescalado. */
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, rw, rh);
 
     /* --- reescalado al tamano real --- */
     if (g_scale > 1) {
         gl.UseProgram(0);
-        EnsureTexture(rw, rh);
-        glBindTexture(GL_TEXTURE_2D, g_tex);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, rw, rh);
         glViewport(0, 0, g_width, g_height);
         glEnable(GL_TEXTURE_2D);
         glColor3f(1.0f, 1.0f, 1.0f);
