@@ -486,7 +486,14 @@ BOOL RendererStart(char* err, int errSize)
     g_wnd = CreateWindowExA(
         WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         RENDER_CLASS, "GLSLPaper",
-        g_host ? (WS_CHILD | WS_VISIBLE) : (WS_POPUP | WS_VISIBLE),
+        /* WS_CLIPCHILDREN | WS_CLIPSIBLINGS son OBLIGATORIOS en una
+           ventana con contexto OpenGL. Sin ellos las ventanas hermanas
+           y el propio padre pueden repintar encima de lo que dibuja
+           SwapBuffers, y el efecto es que no se ve nada aunque todo lo
+           demas este bien. Una WS_POPUP suelta no tiene hermanos que la
+           pisen, por eso ahi el fallo no se manifiesta. */
+        (g_host ? (WS_CHILD | WS_VISIBLE) : (WS_POPUP | WS_VISIBLE))
+            | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
         g_host ? 0 : r.left, g_host ? 0 : r.top, g_width, g_height,
         g_host, NULL, wc.hInstance, NULL);
 
@@ -495,6 +502,7 @@ BOOL RendererStart(char* err, int errSize)
         return FALSE;
     }
 
+    DesktopPrepareHost(g_host);
     DesktopPlace(g_wnd, g_host, g_insertAfter);
 
     g_dc = GetDC(g_wnd);
@@ -548,6 +556,7 @@ void RendererStop(void)
     }
     if (g_dc)  { ReleaseDC(g_wnd, g_dc); g_dc = NULL; }
     if (g_wnd) { DestroyWindow(g_wnd); g_wnd = NULL; }
+    DesktopReleaseHost();
     g_texW = g_texH = 0;
     g_host = NULL;
     g_insertAfter = NULL;

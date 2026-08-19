@@ -52,6 +52,8 @@ HWND DesktopResolveHost(int mode);
 HWND DesktopGetInsertAfter(void);
 int  DesktopEffectiveMode(void);
 void DesktopPlace(HWND hwnd, HWND host, HWND insertAfter);
+void DesktopPrepareHost(HWND host);
+void DesktopReleaseHost(void);
 void DesktopGetVirtualRect(RECT* out);
 void DesktopSetAnchorMode(int mode);
 int  DesktopGetAnchorMode(void);

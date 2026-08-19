@@ -198,6 +198,34 @@ void DesktopGetVirtualRect(RECT* out)
     out->right = x + w; out->bottom = y + h;
 }
 
+/* El padre tiene que recortar a sus hijos; si no, repinta el fondo del
+ * escritorio por encima de nuestra ventana. Guardamos el estilo original
+ * para devolverlo tal cual al salir. */
+static HWND g_preparedHost;
+static LONG g_hostStyleSaved;
+
+void DesktopPrepareHost(HWND host)
+{
+    LONG st;
+    DesktopReleaseHost();
+    if (!host) return;
+
+    st = GetWindowLongA(host, GWL_STYLE);
+    if (st && !(st & WS_CLIPCHILDREN)) {
+        g_preparedHost   = host;
+        g_hostStyleSaved = st;
+        SetWindowLongA(host, GWL_STYLE, st | WS_CLIPCHILDREN);
+    }
+}
+
+void DesktopReleaseHost(void)
+{
+    if (g_preparedHost && IsWindow(g_preparedHost))
+        SetWindowLongA(g_preparedHost, GWL_STYLE, g_hostStyleSaved);
+    g_preparedHost   = NULL;
+    g_hostStyleSaved = 0;
+}
+
 /* Coloca la ventana ya creada: al fondo del Z-order, sin activarla.
    Si tiene padre, las coordenadas son relativas a su area cliente. */
 void DesktopPlace(HWND hwnd, HWND host, HWND insertAfter)
@@ -344,6 +372,13 @@ void DesktopDiagnostics(char* out, int cap, HWND renderWnd)
         style  = GetWindowLongA(renderWnd, GWL_STYLE);
         Line(out, cap, "  padre real       : 0x%08X",
              (DWORD)(UINT_PTR)parent, 0, 0, 0);
+        Line(out, cap, "  CLIPSIBLINGS=%d CLIPCHILDREN=%d (obligatorios en GL)",
+             (DWORD)((style & WS_CLIPSIBLINGS) ? 1 : 0),
+             (DWORD)((style & WS_CLIPCHILDREN) ? 1 : 0), 0, 0);
+        if (parent)
+            Line(out, cap, "  padre CLIPCHILDREN: %d",
+                 (DWORD)((GetWindowLongA(parent, GWL_STYLE) & WS_CLIPCHILDREN) ? 1 : 0),
+                 0, 0, 0);
         Line(out, cap, "  WS_CHILD=%d  WS_VISIBLE=%d  IsWindowVisible=%d",
              (DWORD)((style & WS_CHILD) ? 1 : 0),
              (DWORD)((style & WS_VISIBLE) ? 1 : 0),
